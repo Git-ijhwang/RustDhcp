@@ -45,7 +45,7 @@ enum DHCP_MESSAGE_TYPE {
 }
 
 impl DhcpHeader {
-    fn verify_header( client:Arc<Mutex<super::Clients>>, buffer:&[u8], length: usize) -> i32 {
+    fn verify_header(buffer:&[u8], length: usize) -> i32 {
         let header_size = std::mem::size_of::<DhcpHeader>();
 
         if length < header_size {
@@ -61,7 +61,6 @@ impl DhcpHeader {
 
             }
 
-            client.lock().unwrap().tranxid = header.xid;
         }
 
         header_size as i32
@@ -82,11 +81,13 @@ impl DhcpHeader {
     }
 }
 
-pub fn dhcp_handle(
-    client:Arc<Mutex<super::Clients>>,
-    buffer: &[u8], length: usize) {
+pub fn dhcp_handle( client:&mut Arc<Mutex<super::Clients>>, buffer: &[u8], length: usize) {
 
-    let len = DhcpHeader::verify_header(client, buffer, length);
+    let ret = DhcpHeader::verify_header(buffer, length);
+    if ret < 0 {
+        return
+    }
+
     if let Some(header) = DhcpHeader::from_buffer(buffer) {
         println!("{:#?}", header);
         println!("op: {}", header.op);
@@ -94,6 +95,9 @@ pub fn dhcp_handle(
         println!("hlen: {}", header.hlen);
         println!("hops: {}", header.hops);
         println!("xid: {}", header.xid);
+        client.lock().unwrap().tranxid = header.xid;
+        println!("Saved xid: {:#?}", client.lock().unwrap().tranxid);
+
         println!("secs: {}", header.secs);
         println!("flags: {}", header.flags);
         println!("ciaddr: {}", header.ciaddr);

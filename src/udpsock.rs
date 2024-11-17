@@ -71,9 +71,9 @@ fn print_hex(buffer: &[u8], length: usize) {
 pub fn recv_func(socket: UdpSocket){
     let mut buffer = [0; 1024];
     let mut client_list : Vec<SharedClient> = Vec::new();
-    let mut client = Clients::new("0.0.0.0".to_string(),0,0);
 
     loop {
+        let mut client = None;
         println!("Waiting...");
 
         match socket.recv_from(&mut buffer) {
@@ -85,14 +85,14 @@ pub fn recv_func(socket: UdpSocket){
                 /* IP duplication check */
                 if !dup_check(&mut client_list, ip.clone()) {
                     /* new */
-                    client = Clients::new(ip, port, 0);
-                    client_list.push(client);
+                    client = Some(Clients::new(ip, port, 0));
+                    client_list.push(client.clone().unwrap());
                 }
 
                 print_hex(&buffer[..size], size);
 
                 // let mut data = buffer[..size].to_vec();
-                dhcp_handle(client, &buffer[..size], size);
+                dhcp_handle(&mut client.clone().unwrap(), &buffer[..size], size);
             }
 
             Err(e) => {
