@@ -1,15 +1,12 @@
 mod config;
-mod udpsock;
+mod module_sock;
+mod dump;
 
 use std::net::UdpSocket;
-use std::sync::mpsc::channel;
-use std::sync::{ Arc, Mutex};
-use std::sync::mpsc::{Sender, Receiver};
 use std::thread;
-use std::io::{stdin, Bytes, Result, Read};
-
+use std::io::Result;
 use config::{ConfigMap, read_conf};
-use udpsock::recv_func;
+use module_sock::module_sock::recv_func;
 
 fn main() -> Result<()>{
     let mut config = ConfigMap::new();

@@ -1,5 +1,5 @@
 use std::fs::File;
-use std::io::{stdin, Bytes, Result, Read};
+use std::io::Result;
 use std::collections::HashMap;
 use std::io::prelude::*;
 use std::io;
@@ -10,7 +10,8 @@ pub struct ConfigMap {
 }
 
 
-impl ConfigMap {
+impl ConfigMap
+{
     pub fn new() -> Self {
         ConfigMap{ data: HashMap::new() }
     }
@@ -35,13 +36,12 @@ impl ConfigMap {
         println!("{:?},{:?}", addr, port);
 
         if addr.is_some() && port.is_some() {
-            result = (format!("{}:{}", addr.unwrap(), port.unwrap()));
+            result = format!("{}:{}", addr.unwrap(), port.unwrap());
             return result;
         }
         return result;
     }
 }
-
 
 
 pub fn read_conf(config: &mut ConfigMap ) -> Result<()>
