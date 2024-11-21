@@ -2,21 +2,38 @@ use crate::module_sock::dhcp::dhcp_handle;
 // use super::dump::print_hex;
 use super::super::dump::dump::print_hex;
 
-use std::sync::{ Arc, Mutex};
+use std::net::Ipv4Addr;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use std::net::UdpSocket;
 use std::thread;
 
+#[derive(Debug)] 
 pub struct Clients {
     pub ip: String,
     pub port: u8,
-    pub tranxid: u32,
+    pub tranxid: [u8;4],
+    pub hostname: String,
+    pub reqip: Ipv4Addr,
+    pub lease_time: u32,
+    pub req_list: [u8; 16],
+    pub cid: [u8; 16],
 }
+
 pub type SharedClient = Arc< Mutex< Clients >>;
 
 impl Clients {
-    pub fn new(ip: String, port: u8, tranxid: u32) -> SharedClient {
-        Arc::new( Mutex::new( Clients{ ip, port, tranxid }))
+    pub fn new(ip: String, port: u8) -> SharedClient {
+        Arc::new( Mutex::new(Clients{
+            ip,
+            port,
+            tranxid: [0u8;4],
+            hostname: String::new(),
+            reqip: Ipv4Addr::new(0,0,0,0),
+            lease_time: 0,
+            req_list: [0u8; 16],
+            cid: [0u8; 16]
+        }))
     }
 
     fn print_list (&self) {
@@ -55,7 +72,7 @@ pub fn recv_func(socket: UdpSocket){
                     /* new */
                     println!("New one.  IP address: {}, Port: {}", ip, port);
 
-                    client = Some(Clients::new(ip, port, 0));
+                    client = Some(Clients::new(ip, port));
                     client_list.push(client.clone().unwrap());
                 } else {
                     println!("IP address: {}, Port: {}", ip, port);
