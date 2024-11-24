@@ -3,6 +3,8 @@ use std::io::Result;
 use std::collections::HashMap;
 use std::io::prelude::*;
 use std::io;
+use std::sync::{Arc, RwLock};
+use crate::CONFIG_MAP;
 
 #[derive(Debug)]
 pub struct ConfigMap {
@@ -13,26 +15,23 @@ pub struct ConfigMap {
 impl ConfigMap
 {
     pub fn new() -> Self {
-        ConfigMap{ data: HashMap::new() }
+        Self{ 
+            data: HashMap::new()
+        }
     }
 
     pub fn insert(&mut self, key: String, value: String) {
         self.data.insert(key, value);
     }
 
-    pub fn get_value(&self, target: String) -> Option<String> {
-        for (key, val) in &self.data {
-            if *key == target {
-                return Some(val.clone());
-            }
-        }
-        None
+    pub fn get(&self, target: &str) -> Option<String> {
+        self.data.get(target).cloned()
     }
 
     pub fn create_src_bind_addr(&self) -> String {
         let mut result = String::new();
-        let addr = ConfigMap::get_value(self, "Addr".to_string());
-        let port  = ConfigMap::get_value(self, "SrcPort".to_string());
+        let addr = ConfigMap::get(self, "Addr");
+        let port  = ConfigMap::get(self, "SrcPort");
         println!("{:?},{:?}", addr, port);
 
         if addr.is_some() && port.is_some() {
@@ -44,7 +43,7 @@ impl ConfigMap
 }
 
 
-pub fn read_conf(config: &mut ConfigMap ) -> Result<()>
+pub fn read_conf( ) -> Result<()>
 {
     let file = File::open("src/config")?;
 
@@ -70,7 +69,8 @@ pub fn read_conf(config: &mut ConfigMap ) -> Result<()>
             let key = configline[..pos].trim().to_string();
             let value = configline[pos+1..].trim().to_string();
 
-            ConfigMap::insert( config, key, value);
+            let mut config = CONFIG_MAP.write().unwrap();
+            config.insert(key, value);
         }
     }
 

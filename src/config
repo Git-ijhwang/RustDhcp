@@ -1,5 +1,8 @@
 Addr = 127.0.0.1 # Linklocal Address
 SrcPort = 67
 DstPort = 68
+DNS1 = 127.0.0.1
+DNS2 = 8.8.8.8
+HOST_NAME = home
 
 Type = Server # or Client

@@ -28,6 +28,7 @@ impl ClientId {
 pub struct Clients {
     pub ip: Ipv4Addr,
     pub port: u8,
+    pub socket: UdpSocket,
     pub tranxid: [u8;4],
     pub hostname: String,
     pub reqip: Ipv4Addr,
@@ -45,10 +46,11 @@ pub type SharedClient = Arc< Mutex< Clients >>;
 
 
 impl Clients {
-    pub fn new(ip: Ipv4Addr, port: u8) -> SharedClient {
+    pub fn new(ip: Ipv4Addr, port: u8, socket: &UdpSocket) -> SharedClient {
         Arc::new( Mutex::new(Clients{
             ip,
             port,
+            socket : socket.try_clone().expect("error"),
             tranxid: [0u8;4],
             hostname: String::new(),
             reqip: Ipv4Addr::new(0,0,0,0),
@@ -105,7 +107,7 @@ pub fn recv_func(socket: UdpSocket){
                     /* new */
                     println!("New one.  IP address: {}, Port: {}", ip_addr, port);
 
-                    client = Some(Clients::new(ip_addr, port));
+                    client = Some(Clients::new(ip_addr, port, &socket));
                     client_list.push(client.clone().unwrap());
                 } else {
                     println!("IP address: {}, Port: {}", ip_addr, port);
