@@ -13,13 +13,15 @@ fn main() -> Result<()>{
     let _ = read_conf(&mut config);
 
     // config.
-    let src_bind =  ConfigMap::create_src_bind_addr(&config);
+    // let src_bind =  ConfigMap::create_src_bind_addr(&config);
+    let src_bind = config.create_src_bind_addr();
     if src_bind.len() <= 0 {
         println!("Read config Error");
         return Ok(());
     }
 
-    let svr_type = ConfigMap::get_value(&config, "Type".to_string());
+    // let svr_type = ConfigMap::get_value(&config, "Type".to_string());
+    let svr_type = config.get_value("Type".to_string());
     if svr_type.is_none() {
         println!("Read config Error");
         return Ok(());

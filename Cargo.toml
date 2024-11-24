@@ -5,3 +5,5 @@ edition = "2021"
 
 [dependencies]
 byteorder = "1.4"
+serde = { version = "1.0.215", features = ["derive"] }
+bincode = "1.3"

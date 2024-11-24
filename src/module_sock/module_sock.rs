@@ -1,29 +1,51 @@
+use crate::module_sock::dhcp::DhcpHeader;
 use crate::module_sock::dhcp::dhcp_handle;
 // use super::dump::print_hex;
 use super::super::dump::dump::print_hex;
 
-use std::net::Ipv4Addr;
+use std::net::{IpAddr, Ipv4Addr};
+use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use std::net::UdpSocket;
 use std::thread;
 
 #[derive(Debug)] 
+pub struct ClientId {
+    pub ctype: u8,
+    pub cid: [u8; 16],
+}
+impl ClientId {
+    fn new() -> Self {
+        ClientId {
+            ctype: 0,
+            cid: [0u8; 16]
+        }
+    }
+}
+
+#[derive(Debug)] 
 pub struct Clients {
-    pub ip: String,
+    pub ip: Ipv4Addr,
     pub port: u8,
     pub tranxid: [u8;4],
     pub hostname: String,
     pub reqip: Ipv4Addr,
-    pub lease_time: u32,
-    pub req_list: [u8; 16],
-    pub cid: [u8; 16],
+    pub lease_time: u16,
+    pub elapsed_time: u16,
+    pub req_list: Vec<u8>,
+    pub max_req_sz: u16,
+    pub cid: ClientId,
+    pub hw_addr: [u8; 16],
+    pub magic_cookie: [u8; 4],
+
 }
 
 pub type SharedClient = Arc< Mutex< Clients >>;
 
+
 impl Clients {
-    pub fn new(ip: String, port: u8) -> SharedClient {
+    pub fn new(ip: Ipv4Addr, port: u8) -> SharedClient {
         Arc::new( Mutex::new(Clients{
             ip,
             port,
@@ -31,18 +53,22 @@ impl Clients {
             hostname: String::new(),
             reqip: Ipv4Addr::new(0,0,0,0),
             lease_time: 0,
-            req_list: [0u8; 16],
-            cid: [0u8; 16]
+            elapsed_time: 0,
+            req_list: Vec::new(),
+            max_req_sz: 0,
+            cid: ClientId::new(),
+            hw_addr: [0u8; 16],
+            magic_cookie: [0u8; 4],
         }))
     }
 
-    fn print_list (&self) {
-        println!("{}, {}", self.ip, self.port);
+    pub fn print_self (&self) {
+        println!("{:#?}", self);
     }
 }
 
 
-fn dup_check (list:& mut Vec<SharedClient>, src_ip:String ) -> bool {
+fn dup_check (list:& mut Vec<SharedClient>, src_ip:Ipv4Addr ) -> bool {
     for item in list {
         if item.lock().unwrap().ip == src_ip {
             return true;
@@ -59,26 +85,33 @@ pub fn recv_func(socket: UdpSocket){
 
     loop {
         client = None;
+        let mut ip_addr = Ipv4Addr::new(0,0,0,0);
         println!("Waiting...");
 
         match socket.recv_from(&mut buffer) {
             Ok((size, src)) => {
 
-                let ip = src.ip().to_string();
+                println!("Received Size: {}", size);
+                if let IpAddr::V4(ip) = src.ip() {
+                    ip_addr = ip;
+                }
+                else {
+                    println!("Not support IP address");
+                }
                 let port = src.port() as u8;
 
                 /* IP duplication check */
-                if !dup_check(&mut client_list, ip.clone()) {
+                if !dup_check(&mut client_list, ip_addr.clone()) {
                     /* new */
-                    println!("New one.  IP address: {}, Port: {}", ip, port);
+                    println!("New one.  IP address: {}, Port: {}", ip_addr, port);
 
-                    client = Some(Clients::new(ip, port));
+                    client = Some(Clients::new(ip_addr, port));
                     client_list.push(client.clone().unwrap());
                 } else {
-                    println!("IP address: {}, Port: {}", ip, port);
+                    println!("IP address: {}, Port: {}", ip_addr, port);
                 }
 
-                print_hex(&buffer[..size], size);
+                print_hex(&buffer[..], size);
 
                 // let mut data = buffer[..size].to_vec();
                 dhcp_handle(&mut client.clone().unwrap(), &buffer[..size], size);

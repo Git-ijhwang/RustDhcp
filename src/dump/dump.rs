@@ -1,7 +1,7 @@
 pub fn print_hex(buffer: &[u8], length: usize) {
     let length = length.min(buffer.len());
 
-    println!("Message DUMP ({} Bytes;hex {})",length,length);
+    println!("Message DUMP ({} Bytes)",length);
     println!("===================================");
 
     for i in (0..length).step_by(16) {
