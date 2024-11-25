@@ -62,7 +62,6 @@ pub fn read_conf( ) -> Result<()>
         if let Some(pos) = configline.find('#') {
             configline = configline[..pos].trim().to_string();
         }
-        println!("{configline}");
 
         //Key, Value pair
         if let Some(pos) = configline.find('=') {

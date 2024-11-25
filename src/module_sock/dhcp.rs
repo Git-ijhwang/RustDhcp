@@ -1,41 +1,32 @@
 use core::str;
 use std::str::FromStr;
-use std::{mem, option};
 use std::net::Ipv4Addr;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, MutexGuard};
 use crate::module_sock::module_sock::Clients;
 use super::super::dump::dump::print_hex;
 use super::super::ConfigMap;
 use std::mem::size_of;
-use byteorder::{ByteOrder, BigEndian};
-use serde::{Deserialize, Serialize};
-use crate::CONFIG_MAP;
+use crate::{config, get_ip, CONFIG_MAP};
 use std::ptr;
+use super::super::main;
 
 const HEADER_SIZE: i32 = 240;
 
-enum DHCP_OPERATION_CODE {
-    DHCP_START_REQUEST = 1,
-    DHCP_REPLY,
-}
+const DHCP_START_REQUEST: u8 = 0x01;
+const DHCP_REPLY: u8 = 0x02;
 
 /* htype & hlen */
-enum DHCP_HTYPE {
-    ETH_10MB = 1,
-    ETH_10MB_LEN = 6,
-}
+const ETH_10MB: u8 = 0x01;
+const ETH_10MB_LEN: u8 = 0x06;
 
-
-enum DHCP_MESSAGE_TYPE {
-    DHCPDISCOVER =   1,
-    DHCPOFFER,
-    DHCPREQUEST,
-    DHCPDECLINE,
-    DHCPACK,
-    DHCPNAK,
-    DHCPRELEASE,
-    DHCPINFORM,
-}
+const DHCPDISCOVER: u8 = 0x01;
+const DHCPOFFER: u8 = 0x02;
+const DHCPREQUEST: u8 = 0x03;
+const DHCPDECLINE: u8 = 0x04;
+const DHCPACK: u8 = 0x05;
+const DHCPNAK: u8 = 0x06;
+const DHCPRELEASE: u8 = 0x07;
+const DHCPINFORM: u8 = 0x08;
 
 
 #[repr(C)]
@@ -89,7 +80,6 @@ impl DhcpHeader {
 }
 
 fn parse_option_field (client: &mut Arc<Mutex<Clients>>, buffer:&[u8], len: usize) {
-    let mut msg_type = 0;
     let mut pos  = 0;
     let mut t = 0;
     let mut l = 0;
@@ -127,7 +117,7 @@ fn parse_option_field (client: &mut Arc<Mutex<Clients>>, buffer:&[u8], len: usiz
             },
             53 => {
                 // println!("DHCP Message Type (Request)");
-                msg_type = buffer[pos];
+                client_lock.msg_type = buffer[pos];
             },
             55 => {
                 client_lock.req_list.fill(0);
@@ -167,14 +157,15 @@ fn verify_header( client: &mut Arc<Mutex<Clients>>, buffer: &[u8], length: usize
         println!("Received size is too small rcv:{}", length);
         return -1;
     }
+
     let mut header = DhcpHeader::new();
     from_buffer(buffer, &mut header);
 
-    if header.op != DHCP_OPERATION_CODE::DHCP_START_REQUEST as u8 {
+    if header.op != DHCP_START_REQUEST as u8 {
         println!("Operation Code: 0x{:02x}", header.op);
         return -1;
     }
-    if header.htype != DHCP_HTYPE::ETH_10MB as u8 && header.htype != DHCP_HTYPE::ETH_10MB_LEN as u8 {
+    if header.htype != ETH_10MB as u8 && header.htype != ETH_10MB_LEN as u8 {
         println!("Hardware type: 0x{:02x}", header.htype);
         return -1;
     }
@@ -187,7 +178,8 @@ fn verify_header( client: &mut Arc<Mutex<Clients>>, buffer: &[u8], length: usize
 
     parse_option_field(client, &buffer[HEADER_SIZE as usize..], length-HEADER_SIZE as usize);
     println!("Option field parsing.... Done. ");
-    1
+    return header.op as i32;
+
 }
 
     // fn slice_to_array(input: &[u8]) -> &[u8; 236] {
@@ -220,7 +212,6 @@ fn verify_header( client: &mut Arc<Mutex<Clients>>, buffer: &[u8], length: usize
         header.siaddr = Ipv4Addr::new( buffer[pos], buffer[pos+1], buffer[pos+2], buffer[pos+3]); pos+=4;
         header.giaddr = Ipv4Addr::new( buffer[pos], buffer[pos+1], buffer[pos+2], buffer[pos+3]); pos+=4;
 
-
         header.chaddr.copy_from_slice(&buffer[pos..pos+16]); pos+=16;
         header.sname.copy_from_slice(&buffer[pos..pos+64]); pos+=64;
         header.file.copy_from_slice(&buffer[pos..pos+128]); pos+=128;
@@ -234,101 +225,91 @@ fn make_dhcp_response() {}
 fn send_dhcp_msg(){}
 
 /// DHCP OFFER 메시지 생성
-fn create_dhcp_header(client: &mut Arc<Mutex<Clients>>, buffer: &mut [u8]) -> usize {
-
+fn create_dhcp_header( client: &mut Arc<Mutex<Clients>>, buffer: &mut [u8], msg_type: u8) -> usize {
+    let config = CONFIG_MAP.read().unwrap();
+    let client_lock = client.lock().unwrap();
     let mut rsp = DhcpHeader::new();
 
-    let mut options: [u8;128] = [0u8;128];
-    let config = CONFIG_MAP.read().unwrap();
-    let mut l = 0;
-
     println!("Start DHCP Header creating");
-    //Msg Type: 2
-    rsp.op = 0x02;
-    //HW type: 0x01
-    rsp.htype = 0x01;
-    //addr len 6
-    rsp.hlen = 0x06;
-    //hops 0
-    rsp.hops = 0x00;
-    //tranxid: 2fe3016a
-    // rsp.xid = client.lock().unwrap().tranxid;
-    rsp.xid.clone_from_slice(&client.lock().unwrap().tranxid);
-    println!("===>{:?}//", rsp.xid);
-    //sec elapsed 42
-    rsp.secs = client.lock().unwrap().elapsed_time;
-    //bootp flag 0x00
-    rsp.flags = 0;
-    //client ip 00
-    rsp.ciaddr = Ipv4Addr::new(0,0,0,0);
-    //your ip 2.19
-    //rsp.yiaddr = 
-    //next svr ip : 0.0.0.0
-    rsp.siaddr = Ipv4Addr::new(0,0,0,0);
-    //relay agent: 0.0.0.0
-    rsp.giaddr = Ipv4Addr::new(0,0,0,0);
-    //mac: 3c 22 fb 7d 8b, ee
-    rsp.chaddr = client.lock().unwrap().hw_addr;
-    //client hw addr padding 00
-    // host name -
-    //rsp.sname = 0;
-    //boot file -
-    //magic - 63 82 53 63
-    rsp.magic_cookie = client.lock().unwrap().magic_cookie;
+    rsp.op = msg_type; //Msg Type
+    rsp.htype = ETH_10MB; //HW type
+    rsp.hlen = 0x06; //addr len
+    rsp.hops = 0x00; //hops
+    rsp.xid.clone_from_slice(&client_lock.tranxid); //tranxid
+    rsp.secs = client_lock.elapsed_time; //sec elapsed time
+    rsp.flags = 0; //bootp flag 
+    rsp.ciaddr = Ipv4Addr::new(0,0,0,0); //client ip
+    rsp.yiaddr = client_lock.allocate_ip;
+    let str = config.get("Addr").unwrap();
+    rsp.siaddr = Ipv4Addr::from_str(&str).unwrap();
+    rsp.giaddr = Ipv4Addr::new(0,0,0,0); //relay agent
+    rsp.chaddr = client_lock.hw_addr; //mac
+    rsp.magic_cookie = client_lock.magic_cookie; //magic
 
+    // Convert to buffer
     unsafe {
         let struct_ptr = &rsp as *const DhcpHeader as *const u8;
         ptr::copy_nonoverlapping(struct_ptr, buffer.as_mut_ptr(), HEADER_SIZE as usize);
     }
 
-    // print_hex(buffer, HEADER_SIZE as usize);
+    return HEADER_SIZE as usize;
+}
 
+
+fn create_dhcp_option( client: &mut Arc<Mutex<Clients>>, buffer: &mut [u8], option_type:u8) -> usize {
+    let config = CONFIG_MAP.read().unwrap();
+    let mut options: [u8;128] = [0u8;128];
+    let mut l = 0;
+    // print_hex(buffer, HEADER_SIZE as usize);
+    println!("Start DHCP Option creating");
+
+    let client_lock = client.lock().unwrap();
     {
-                //Type
-                options[l] = 53; l+=1;
-                //Length
-                options[l] = 1; l+=1;
-                //Value
-                options[l] = 2; l+=1;
+        //Type
+        options[l] = 53; l+=1;
+        //Length
+        options[l] = 1; l+=1;
+        //Value
+        options[l] = option_type; l+=1;
     }
 
-
-            {
-                //Type
-                options[l] = 54; l+=1;
-                //Length
-                options[l] = 4; l+=1;
-                //Value
-                let ip = config.get("Addr");
-                if ip.is_none() {
-                    println!("Key(Addr) not found");
-                }
-                let addr = Ipv4Addr::from_str(&(ip.unwrap()));
-                match addr {
-                    Ok(ip) => {
-                        options[l..l+4].copy_from_slice(&(ip.octets()));
-                    }
-                    Err(e) => {
-                        println!("Failed to parse IP address: {}", e)
-                    }
-                }
-                l+=4;
+    {
+        //Type
+        options[l] = 54; l+=1;
+        //Length
+        options[l] = 4; l+=1;
+        //Value
+        let ip = config.get("Addr");
+        if ip.is_none() {
+            println!("Key(Addr) not found");
+        }
+        let addr = Ipv4Addr::from_str(&(ip.unwrap()));
+        match addr {
+            Ok(ip) => {
+                options[l..l+4].copy_from_slice(&(ip.octets()));
             }
-            {
-                //Type
-                options[l] = 51; l+=1;
-                //Length
-                options[l] = 4; l+=1;
-                //Value
-                let sec: u32 = 259200;
-                // let sec:i16 = 3*86400;
-                let three_days = sec.to_le_bytes();
-                options[l..l+4].copy_from_slice(&three_days);
-                l+=4;
+            Err(e) => {
+                println!("Failed to parse IP address: {}", e)
             }
-            //option 1 subnet mask 255.25.255.0
+        }
+        l+=4;
+    }
 
-    for t in &client.lock().unwrap().req_list {
+    {
+        //Type
+        options[l] = 51; l+=1;
+        //Length
+        options[l] = 4; l+=1;
+        //Value
+        let sec: u32 = 259200;
+        let three_days = sec.to_le_bytes();
+        options[l..l+4].copy_from_slice(&three_days);
+
+        l+=4;
+    }
+    //option 1 subnet mask 255.25.255.0
+
+    for t in &client_lock.req_list {
         match *t {
             //option 53 DHCP Msg Type :2
             53 => {
@@ -337,7 +318,7 @@ fn create_dhcp_header(client: &mut Arc<Mutex<Clients>>, buffer: &mut [u8]) -> us
                 //Length
                 options[l] = 1; l+=1;
                 //Value
-                options[l] = 2; l+=1;
+                options[l] = DHCPOFFER; l+=1;
             }
             //option 54 svr identifier 192.168.2.1
             54 => {
@@ -373,6 +354,7 @@ fn create_dhcp_header(client: &mut Arc<Mutex<Clients>>, buffer: &mut [u8]) -> us
                 let sec: i32 = 259200;
                 let three_days = sec.to_le_bytes();
                 options.copy_from_slice(&three_days);
+
                 l+=2;
             }
             //option 1 subnet mask 255.25.255.0
@@ -462,40 +444,52 @@ fn create_dhcp_header(client: &mut Arc<Mutex<Clients>>, buffer: &mut [u8]) -> us
     }
     options[l] = 255; l+=1;
 
-    // print_hex(&options, l);
-
-
     unsafe {
         let additional_data_ptr = options.as_ptr();
         ptr::copy_nonoverlapping(additional_data_ptr, buffer.as_mut_ptr().offset(HEADER_SIZE as isize), l);
     }
 
-    println!("Done.");
-    return HEADER_SIZE as usize + l;
-    // print_hex(buffer, HEADER_SIZE as usize + l);
-
+    return l;
 }
 
 
 pub fn dhcp_handle( client: &mut Arc<Mutex<Clients>>, buffer: &[u8], length: usize) {
     // let mut header;
+    let mut rsp_buffer: [u8; 1024] = [0u8;1024];
+    let msg_type;
+    let mut len = 0;
 
     let ret = verify_header(client, buffer, length);
     if ret < 0 {
-        println!("verify occured");
+        println!("Verify Error Occured");
         return
     }
 
-    // 2. 응답 생성
-    let mut rsp_buffer: [u8; 1024] = [0u8;1024];
-    let len = create_dhcp_header(client, &mut rsp_buffer);
-    // let bind = format!("{}:{}", client.lock().unwrap().ip, client.lock().unwrap().port);
+    {
+        msg_type = client.lock().unwrap().msg_type;
+    }
+
+    // 2. Create Response
+    if ret as u8 == DHCP_START_REQUEST && msg_type == DHCPDISCOVER {
+        len = create_dhcp_header(client, &mut rsp_buffer, DHCP_REPLY);
+        len = create_dhcp_option(client, &mut rsp_buffer, DHCPOFFER);
+    }
+    if ret as u8 == DHCP_START_REQUEST && msg_type == DHCPREQUEST {
+        let ip = get_ip();
+        println!("Allocated IP Address is: {:?}", ip);
+        client.lock().unwrap().allocate_ip = ip;
+
+        len = create_dhcp_header(client, &mut rsp_buffer, DHCP_REPLY);
+        len = create_dhcp_option(client, &mut rsp_buffer, DHCPACK);
+    }
+
+    // 3. Message Send
+    let client_lock = client.lock().unwrap();
     let bind = {
-        let client_data = client.lock().unwrap(); // 한 번만 lock 호출
-        format!("{}:{}", client_data.ip, client_data.port)
+        format!("{}:{}", client_lock.ip, client_lock.port)
     };
-    println!("{}", bind);
-    match client.lock().unwrap().socket.send_to(&rsp_buffer[..len], bind) {
+
+    match client_lock.socket.send_to(&rsp_buffer[..len], bind) {
         Ok(bytes_sent) => {
             println!("Send {} bytes", bytes_sent);
         }

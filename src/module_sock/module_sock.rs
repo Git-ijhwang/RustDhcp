@@ -32,6 +32,7 @@ pub struct Clients {
     pub tranxid: [u8;4],
     pub hostname: String,
     pub reqip: Ipv4Addr,
+    pub allocate_ip: Ipv4Addr,
     pub lease_time: u16,
     pub elapsed_time: u16,
     pub req_list: Vec<u8>,
@@ -39,7 +40,7 @@ pub struct Clients {
     pub cid: ClientId,
     pub hw_addr: [u8; 16],
     pub magic_cookie: [u8; 4],
-
+    pub msg_type: u8,
 }
 
 pub type SharedClient = Arc< Mutex< Clients >>;
@@ -54,6 +55,7 @@ impl Clients {
             tranxid: [0u8;4],
             hostname: String::new(),
             reqip: Ipv4Addr::new(0,0,0,0),
+            allocate_ip: Ipv4Addr::new(0,0,0,0),
             lease_time: 0,
             elapsed_time: 0,
             req_list: Vec::new(),
@@ -61,6 +63,7 @@ impl Clients {
             cid: ClientId::new(),
             hw_addr: [0u8; 16],
             magic_cookie: [0u8; 4],
+            msg_type: 0,
         }))
     }
 
