@@ -2,13 +2,13 @@ use crate::module_sock::dhcp::DhcpHeader;
 use crate::module_sock::dhcp::dhcp_handle;
 // use super::dump::print_hex;
 use super::super::dump::dump::print_hex;
-
 use std::net::{IpAddr, Ipv4Addr};
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use std::net::UdpSocket;
 use std::thread;
+
 
 #[derive(Debug)] 
 pub struct ClientId {
@@ -43,11 +43,9 @@ pub struct Clients {
     pub msg_type: u8,
 }
 
-pub type SharedClient = Arc< Mutex< Clients >>;
-
 
 impl Clients {
-    pub fn new(ip: Ipv4Addr, port: u8, socket: &UdpSocket) -> SharedClient {
+    pub fn new(ip: Ipv4Addr, port: u8, socket: &UdpSocket) -> Arc< Mutex< Self >> {
         Arc::new( Mutex::new(Clients{
             ip,
             port,
@@ -73,7 +71,7 @@ impl Clients {
 }
 
 
-fn dup_check (list:& mut Vec<SharedClient>, src_ip:Ipv4Addr ) -> bool {
+fn dup_check (list:& mut Vec<Arc<Mutex<Clients>>>, src_ip:Ipv4Addr ) -> bool {
     for item in list {
         if item.lock().unwrap().ip == src_ip {
             return true;
@@ -85,11 +83,10 @@ fn dup_check (list:& mut Vec<SharedClient>, src_ip:Ipv4Addr ) -> bool {
 // fn recv_func(tx: Sender<String>, socket: UdpSocket){
 pub fn recv_func(socket: UdpSocket){
     let mut buffer = [0u8; 1024];
-    let mut client_list : Vec<SharedClient> = Vec::new();
-    let mut client = None;
+    let mut client_list: Vec<Arc<Mutex<Clients>>> = Vec::new();
+    let mut client: Arc<Mutex<Clients>>;
 
     loop {
-        client = None;
         let mut ip_addr = Ipv4Addr::new(0,0,0,0);
         println!("Waiting...");
 
@@ -110,8 +107,8 @@ pub fn recv_func(socket: UdpSocket){
                     /* new */
                     println!("New one.  IP address: {}, Port: {}", ip_addr, port);
 
-                    client = Some(Clients::new(ip_addr, port, &socket));
-                    client_list.push(client.clone().unwrap());
+                    let new_client = Clients::new(ip_addr, port, &socket);
+                    client_list.push(new_client.clone());
                 } else {
                     println!("IP address: {}, Port: {}", ip_addr, port);
                 }
@@ -119,7 +116,13 @@ pub fn recv_func(socket: UdpSocket){
                 print_hex(&buffer[..], size);
 
                 // let mut data = buffer[..size].to_vec();
-                dhcp_handle(&mut client.clone().unwrap(), &buffer[..size], size);
+                if let Some(client) = client_list.iter().find(|c| {
+                    let c = c.lock().unwrap();
+                    c.ip == ip_addr && c.port == port
+                }) {
+                    // dhcp_handle(&mut client.clone().unwrap(), &buffer[..size], size);
+                    dhcp_handle(client, &buffer[..size], size);
+                }
                 buffer = [0; 1024];
             }
 
