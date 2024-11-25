@@ -65,9 +65,6 @@ impl Clients {
         }))
     }
 
-    pub fn print_self (&self) {
-        println!("{:#?}", self);
-    }
 }
 
 
