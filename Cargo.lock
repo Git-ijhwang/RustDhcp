@@ -24,6 +24,7 @@ dependencies = [
  "bincode",
  "byteorder",
  "fern",
+ "humantime",
  "lazy_static",
  "log",
  "serde",
@@ -37,6 +38,12 @@ checksum = "69ff9c9d5fb3e6da8ac2f77ab76fe7e8087d512ce095200f8f29ac5b656cf6dc"
 dependencies = [
  "log",
 ]
+
+[[package]]
+name = "humantime"
+version = "2.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9a3a5bfb195931eeb336b2a7b4d761daec841b97f947d34394601737a7bba5e4"
 
 [[package]]
 name = "lazy_static"

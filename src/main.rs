@@ -4,13 +4,15 @@ mod dump;
 
 use std::net::UdpSocket;
 use std::thread;
-use std::io::Result;
+use std::result::Result;
 use config::{ConfigMap, read_conf};
 use module_sock::module_sock::recv_func;
 use std::sync::{Arc, RwLock};
 use std::net::Ipv4Addr;
 use std::str::FromStr;
 use std::sync::{Mutex, MutexGuard};
+use log::{debug, error, info, trace, warn};
+use std::time::SystemTime;
 
 lazy_static::lazy_static! {
     pub static ref CONFIG_MAP: Arc<RwLock<ConfigMap>> = Arc::new(RwLock::new(ConfigMap::new()));
@@ -58,35 +60,76 @@ fn prepare_ip_pool() {
     }
 }
 
-fn main() -> Result<()>{
-    // let mut config = ConfigMap::new();
-     _ = read_conf();
-    prepare_ip_pool();
+
+fn setup_logger(log: &str) -> Result<(), fern::InitError> {
+
+    fern::Dispatch::new()
+        .format(|out, message, record| {
+            out.finish(format_args!(
+                "[{} {} {}] {}",
+                humantime::format_rfc3339_seconds(SystemTime::now()),
+                record.level(),
+                record.target(),
+                message
+            ))
+        })
+        .level(log::LevelFilter::Debug)
+        .chain(std::io::stdout())
+        .chain(fern::log_file(log)?)
+        .apply()?;
+
+    Ok(())
+}
+
+fn socket_create (src_bind: String) -> Result<UdpSocket, String> {
+    let socket = UdpSocket::bind(&src_bind).map_err(|e| {
+        format!("UDP Socket binding Error on {}: {}", src_bind, e)
+    })?;
+
+    socket.set_nonblocking(false).map_err(|e| {
+        format!("Failed to set non-blocking mode: {}", e)
+    })?;
+
+    Ok(socket)
+}
+
+fn main() -> Result<(),()>
+{
+    /* Read Config */
+    _ = read_conf();
     let config = CONFIG_MAP.read().unwrap();
 
-    // config.
-    // let src_bind =  ConfigMap::create_src_bind_addr(&config);
+    /* Logging Setup */
+    if setup_logger(&config.get("Log").unwrap()).is_err() {
+        println!("Loggin Setting Error.");
+        return Err(());
+     }
+
+    /* IP Pool set-up */
+    info!("IP Pool Set up");
+    prepare_ip_pool();
+
+    // Create Binding
     let src_bind = config.create_src_bind_addr();
+    info!("Created Binding for {}", src_bind);
     if src_bind.len() <= 0 {
         println!("Read config Error");
-        return Ok(());
+        return Err(());
     }
 
-    // let svr_type = ConfigMap::get_value(&config, "Type".to_string());
     let svr_type = config.get("Type");
     if svr_type.is_none() {
         println!("Read config Error");
-        return Ok(());
+        return Err(());
     }
 
-    println!("{}", src_bind);
+    let socket = socket_create(src_bind);
+    if socket.is_err() {
+        println!("{}", socket.unwrap_err());
+        return Err(());
+    }
 
-    let socket = UdpSocket::bind(src_bind)?;
-    socket.set_nonblocking(false)?;
-
-    // let socket_clone = socket.try_clone().expect("Failed to clone socket");
-    // let (tx, rx) = channel::<String>();
-    // let mut client = Arc::new(Mutex::new(Vec::<udpsock::Clients>::new()));
+    let socket = socket.unwrap();
 
     let handle = thread::spawn(move || {
         println!("Create Receive Thread");
@@ -95,7 +138,5 @@ fn main() -> Result<()>{
 
     handle.join().unwrap();
 
-    // send_func(socket_clone, dst_bind);
-
-    Ok(())
+   Ok(())
 }

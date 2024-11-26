@@ -7,3 +7,4 @@ HOST_NAME = home
 PREFIX_V4 = 192.168.10.0
 NETMASK_V4 = 255.255.255.0
 Type = Server # or Client
+Log = logfile.log
