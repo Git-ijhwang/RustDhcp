@@ -1,6 +1,7 @@
 use crate::module_sock::dhcp::DhcpHeader;
 use crate::module_sock::dhcp::dhcp_handle;
 // use super::dump::print_hex;
+use super::super::main;
 use super::super::dump::dump::print_hex;
 use std::net::{IpAddr, Ipv4Addr};
 use std::str::FromStr;
@@ -8,6 +9,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use std::net::UdpSocket;
 use std::thread;
+use log::{info, error, warn};
 
 
 #[derive(Debug)] 
@@ -85,29 +87,29 @@ pub fn recv_func(socket: UdpSocket){
 
     loop {
         let mut ip_addr = Ipv4Addr::new(0,0,0,0);
-        println!("Waiting...");
+        info!("Waiting...");
 
         match socket.recv_from(&mut buffer) {
             Ok((size, src)) => {
 
-                println!("Received Size: {}", size);
+                info!("Received Size: {}", size);
                 if let IpAddr::V4(ip) = src.ip() {
                     ip_addr = ip;
                 }
                 else {
-                    println!("Not support IP address");
+                    warn!("Not support IP address");
                 }
                 let port = src.port() as u8;
 
                 /* IP duplication check */
                 if !dup_check(&mut client_list, ip_addr.clone()) {
                     /* new */
-                    println!("New one.  IP address: {}, Port: {}", ip_addr, port);
+                    info!("New one.  IP address: {}, Port: {}", ip_addr, port);
 
                     let new_client = Clients::new(ip_addr, port, &socket);
                     client_list.push(new_client.clone());
                 } else {
-                    println!("IP address: {}, Port: {}", ip_addr, port);
+                    info!("IP address: {}, Port: {}", ip_addr, port);
                 }
 
                 print_hex(&buffer[..], size);
@@ -124,7 +126,7 @@ pub fn recv_func(socket: UdpSocket){
             }
 
             Err(e) => {
-                eprintln!("Error receiving data: {:?}", e);
+                error!("Error receiving data: {:?}", e);
             }
         }
 

@@ -9,6 +9,7 @@ use std::mem::size_of;
 use crate::{config, get_ip, CONFIG_MAP};
 use std::ptr;
 use super::super::main;
+use log::{info, error, warn};
 
 const HEADER_SIZE: i32 = 240;
 
@@ -98,7 +99,7 @@ fn parse_option_field (client: &mut Clients, buffer:&[u8], len: usize) {
 
         match t {
             12 => {
-                // println!("Host Name");
+                info!("Host Name");
                 match str::from_utf8(&buffer[pos..pos+l]) {
                     Ok(string) => client.hostname = string.to_string(),
                     Err(e) => break,
@@ -106,41 +107,41 @@ fn parse_option_field (client: &mut Clients, buffer:&[u8], len: usize) {
             },
 
             50 => {
-                // println!("Request IP Address");
+                info!("Request IP Address");
                 client.reqip = Ipv4Addr::new(buffer[pos], buffer[pos+1], buffer[pos+2], buffer[pos+3])
             },
 
             51 => {
-                // println!("IP Address Lease Time");
+                info!("IP Address Lease Time");
                 client.lease_time = u16::from_be_bytes([buffer[pos],buffer[pos+1]]);
             },
 
             53 => {
-                // println!("DHCP Message Type (Request)");
+                info!("DHCP Message Type (Request)");
                 client.msg_type = buffer[pos];
             },
 
             55 => {
                 client.req_list.fill(0);
-                // println!("Parameter Request List Len: {}", l);
+                info!("Parameter Request List Len: {}", l);
                 for &v in &buffer[pos..pos+l] {
                     client.req_list.push(v);
                 }
             },
 
             57 => {
-                // println!("Maximum DHCP Message Size ");
+                info!("Maximum DHCP Message Size ");
                 client.max_req_sz = u16::from_be_bytes([buffer[pos],buffer[pos+1]]);
             },
 
             61 => {
-                // println!("Client Identifier");
+                info!("Client Identifier");
                 client.cid.ctype = buffer[pos];
                 client.cid.cid[..l-1].copy_from_slice(&buffer[pos+1..pos+l]);
             },
 
-            255 =>println!("Opeion End"),
-            _ => println!("Unknown type {}", t)
+            255 =>info!("Opeion End"),
+            _ => error!("Unknown type {}", t)
         }
 
         pos += l;
@@ -152,7 +153,7 @@ fn parse_option_field (client: &mut Clients, buffer:&[u8], len: usize) {
 fn verify_header(client: &mut Clients, buffer: &[u8], length: usize) -> i32 {
 
     if length < HEADER_SIZE as usize {
-        println!("Received size is too small. rcv message len:{}", length);
+        error!("Received size is too small. rcv message len:{}", length);
         return -1;
     }
 
@@ -160,12 +161,12 @@ fn verify_header(client: &mut Clients, buffer: &[u8], length: usize) -> i32 {
     from_buffer(buffer, &mut header);
 
     if header.op != DHCP_START_REQUEST as u8 {
-        println!("Operation Code: 0x{:02x}", header.op);
+        error!("Operation Code: 0x{:02x}", header.op);
         return -1;
     }
 
     if header.htype != ETH_10MB as u8 && header.htype != ETH_10MB_LEN as u8 {
-        println!("Hardware type: 0x{:02x}", header.htype);
+        error!("Hardware type: 0x{:02x}", header.htype);
         return -1;
     }
 
@@ -211,7 +212,7 @@ fn create_dhcp_header( client: & Clients, buffer: &mut [u8], msg_type: u8) -> us
     // let client_lock = client.lock().unwrap();
     let mut rsp = DhcpHeader::new();
 
-    println!("Start DHCP Header creating");
+    info!("Start DHCP Header creating");
     rsp.op =    msg_type; //Msg Type
     rsp.htype = ETH_10MB; //HW type
     rsp.hlen =  0x06; //addr len
@@ -257,7 +258,7 @@ fn create_dhcp_option( client: & Clients, buffer: &mut [u8], option_type:u8) -> 
     //Value
     let ip = config.get("Addr");
     if ip.is_none() {
-        println!("Key(Addr) not found");
+        error!("Key(Addr) not found");
     }
     let addr = Ipv4Addr::from_str(&(ip.unwrap()));
     match addr {
@@ -265,7 +266,7 @@ fn create_dhcp_option( client: & Clients, buffer: &mut [u8], option_type:u8) -> 
             options[l..l+4].copy_from_slice(&(ip.octets()));
         }
         Err(e) => {
-            println!("Failed to parse IP address: {}", e)
+            error!("Failed to parse IP address: {}", e)
         }
     }
     l+=4;
@@ -300,7 +301,7 @@ fn create_dhcp_option( client: & Clients, buffer: &mut [u8], option_type:u8) -> 
                 //Value
                 let ip = config.get("Addr");
                 if ip.is_none() {
-                    println!("Key(Addr) not found");
+                    error!("Key(Addr) not found");
                     break;
                 }
                 let addr = Ipv4Addr::from_str(&(ip.unwrap()));
@@ -309,7 +310,7 @@ fn create_dhcp_option( client: & Clients, buffer: &mut [u8], option_type:u8) -> 
                         options[l..l+4].copy_from_slice(&(ip.octets()));
                     }
                     Err(e) => {
-                        println!("Failed to parse IP address: {}", e)
+                        error!("Failed to parse IP address: {}", e)
                     }
                 }
                 l+=4;
@@ -341,7 +342,7 @@ fn create_dhcp_option( client: & Clients, buffer: &mut [u8], option_type:u8) -> 
                         options[l..l+4].copy_from_slice(&(ip.octets()));
                     }
                     Err(e) => {
-                        println!("Failed to parse IP address: {}", e)
+                        error!("Failed to parse IP address: {}", e)
                     }
                 }
                 l+=4;
@@ -355,7 +356,7 @@ fn create_dhcp_option( client: & Clients, buffer: &mut [u8], option_type:u8) -> 
                 //Value
                 let ip = config.get("Addr");
                 if ip.is_none() {
-                    println!("Key(Addr) not found");
+                    error!("Key(Addr) not found");
                     break;
                 }
                 let addr = Ipv4Addr::from_str(&(ip.unwrap()));
@@ -364,7 +365,7 @@ fn create_dhcp_option( client: & Clients, buffer: &mut [u8], option_type:u8) -> 
                         options[l..l+4].copy_from_slice(&(ip.octets()));
                     }
                     Err(e) => {
-                        println!("Failed to parse IP address: {}", e)
+                        error!("Failed to parse IP address: {}", e)
                     }
                 }
                 l+=4;
@@ -378,7 +379,7 @@ fn create_dhcp_option( client: & Clients, buffer: &mut [u8], option_type:u8) -> 
                 //Value
                 let ip = config.get("DNS1");
                 if ip.is_none() {
-                    println!("Key(Addr) not found");
+                    error!("Key(Addr) not found");
                     break;
                 }
                 let addr = Ipv4Addr::from_str(&(ip.unwrap()));
@@ -387,7 +388,7 @@ fn create_dhcp_option( client: & Clients, buffer: &mut [u8], option_type:u8) -> 
                         options[l..l+4].copy_from_slice(&(ip.octets()));
                     }
                     Err(e) => {
-                        println!("Failed to parse IP address: {}", e)
+                        error!("Failed to parse IP address: {}", e)
                     }
                 }
                 l+=4;
@@ -407,7 +408,7 @@ fn create_dhcp_option( client: & Clients, buffer: &mut [u8], option_type:u8) -> 
             }
 
             _ => {
-                println!("Unknown Option Type: {}", *t);
+                error!("Unknown Option Type: {}", *t);
              }
         }
     }
@@ -430,7 +431,7 @@ pub fn dhcp_handle( client: &Arc<Mutex<Clients>>, buffer: &[u8], length: usize) 
 
     let ret = verify_header(&mut client, buffer, length);
     if ret < 0 {
-        println!("Verify Error Occured");
+        error!("Verify Error Occured");
         return
     }
 
@@ -446,17 +447,17 @@ pub fn dhcp_handle( client: &Arc<Mutex<Clients>>, buffer: &[u8], length: usize) 
 
                 DHCPREQUEST => {
                     let ip = get_ip();
-                    println!("Allocated IP Address is: {:?}", ip);
+                    info!("Allocated IP Address is: {:?}", ip);
                     client.allocate_ip = ip;
 
                     len = create_dhcp_header(&client, &mut rsp_buffer, DHCP_REPLY);
                     len = create_dhcp_option(&client, &mut rsp_buffer, DHCPACK);
                 },
 
-                _ => println!("Unexpect DHCP Option Message type value: {}", msg_type),
+                _ => error!("Unexpect DHCP Option Message type value: {}", msg_type),
             }
         },
-        _ => println!("Unexpect DHCP Op value: {}", op_val),
+        _ => error!("Unexpect DHCP Op value: {}", op_val),
     }
 
     // 3. Message Send
@@ -467,10 +468,10 @@ pub fn dhcp_handle( client: &Arc<Mutex<Clients>>, buffer: &[u8], length: usize) 
 
     match client.socket.send_to(&rsp_buffer[..len], bind) {
         Ok(bytes_sent) => {
-            println!("Send {} bytes", bytes_sent);
+            info!("Send {} bytes", bytes_sent);
         }
         Err(e) => {
-            eprintln!("Failed to send data: {:?}", e);
+            error!("Failed to send data: {:?}", e);
         }
     }
 }

@@ -1,13 +1,15 @@
+use log::{info, error, warn};
+
 pub fn print_hex(buffer: &[u8], length: usize) {
     let length = length.min(buffer.len());
 
-    println!("Message DUMP ({} Bytes)",length);
-    println!("===================================");
+    info!("Message DUMP ({} Bytes)",length);
+    info!("===================================");
 
     for i in (0..length).step_by(16) {
         if i+16 <= length {
 
-            println!("{:04x}: {:02x}{:02x} {:02x}{:02x} | {:02x}{:02x} {:02x}{:02x} | {:02x}{:02x} {:02x}{:02x} | {:02x}{:02x} {:02x}{:02x} "
+            info!("{:04x}: {:02x}{:02x} {:02x}{:02x} | {:02x}{:02x} {:02x}{:02x} | {:02x}{:02x} {:02x}{:02x} | {:02x}{:02x} {:02x}{:02x} "
                 ,i
                 ,buffer[i+ 0],buffer[i+ 1],buffer[i+ 2],buffer[i+ 3]
                 ,buffer[i+ 4],buffer[i+ 5],buffer[i+ 6],buffer[i+ 7]
@@ -39,10 +41,10 @@ pub fn print_hex(buffer: &[u8], length: usize) {
                 k+=1;
             }
 
-            println!("{}", buf);
+            info!("{}", buf);
         }
     }
 
-    println!(); // 마지막 줄 바꿈
+    info!(""); // 마지막 줄 바꿈
 }
 
